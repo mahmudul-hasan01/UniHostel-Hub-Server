@@ -3,6 +3,7 @@ const express = require('express')
 const app = express()
 const cors = require('cors')
 require('dotenv').config()
+const stripe = require('stripe')(process.env.Stripe_Secret_key)
 const port = process.env.PORT || 5000
 
 app.use(cors({
@@ -112,6 +113,7 @@ async function run() {
       const update = {
         $set: {
           role: bodyData?.role ,
+          status: bodyData?.status ,
         }
       }
       const result = await users.updateOne(query, update, options)
@@ -132,8 +134,45 @@ async function run() {
       res.send(result)
     })
 
-    app.get('/mealItem/:id', async (req, res) => {
-     
+    // payment
+
+    app.post('/payment-intent', async (req, res) => {
+      const { price } = req.body
+      const amount = parseInt(price * 100)
+      const paymentIntent = await stripe.paymentIntents.create({
+        amount: amount,
+        currency: "usd",
+        payment_method_types: ['card']
+      })
+      res.send({
+        clientSecret: paymentIntent.client_secret,
+      });
+    })
+
+
+
+    app.put('/user/:email', async (req, res) => {
+      const email = req.params.email
+      const query = { email: email }
+      const options = { upsert: true };
+      const bodyData = req.body
+
+      const update = {
+        $set: {
+          name: bodyData.name,
+          email: bodyData.email,
+          image: bodyData.image,
+          role: bodyData.role,
+        }
+      }
+      const result = await user.updateOne(query, update, options)
+      res.send(result)
+    })
+    app.delete('/user/:id', async (req, res) => {
+      const id = req.params.id
+      const query = { _id: new ObjectId(id)}
+      const result = await user.deleteOne(query)
+      res.send(result)
     })
 
 
