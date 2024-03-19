@@ -33,20 +33,21 @@ async function run() {
     const upcoming = client.db("HostelDB").collection("upcoming");
     const users = client.db("HostelDB").collection("users");
     const memberShip = client.db("HostelDB").collection("memberShip");
+    const mealRequest = client.db("HostelDB").collection("mealRequest");
 
 
 
     // admin rode 
 
-    const verifyAdmin = async (req, res, next) => {
-      const user = req.user
-      console.log('user from verify admin', user)
+    // const verifyAdmin = async (req, res, next) => {
+    //   const user = req.user
+    //   console.log('user from verify admin', user)
       // const query = { email: user?.email }
       // const result = await users.findOne(query)
       // if (!result || result?.role !== 'admin')
       //   return res.status(401).send({ message: 'unauthorized access' })
-      next()
-    }
+    //   next()
+    // }
 
 
     // // meals
@@ -84,7 +85,6 @@ async function run() {
 
     app.delete('/mealItem/:id', async (req, res) => {
       const id = req.params.id
-      console.log(id);
       const query = { _id: new ObjectId(id) }
       const result = await mealsItem.deleteOne(query)
       res.send(result)
@@ -115,9 +115,24 @@ async function run() {
       res.send(result)
     })
 
+    // Meal request
+
+    app.post('/mealRequest', async (req, res) => {
+      const meals = req.body
+      const result = await mealRequest.insertOne(meals)
+      res.send(result)
+    })
+
+    app.delete('/mealRequest/:id', async (req, res) => {
+      const id = req.params.id
+      const query = { _id: new ObjectId(id) }
+      const result = await mealsItem.deleteOne(query)
+      res.send(result)
+    })
+
     // upcoming
 
-    app.get('/upcoming', verifyAdmin, async (req, res) => {
+    app.get('/upcoming', async (req, res) => {
       const result = await upcoming.find().toArray()
       res.send(result)
     })
@@ -128,9 +143,8 @@ async function run() {
       res.send(result)
     })
 
-
     // user
-    app.get('/users', verifyAdmin, async (req, res) => {
+    app.get('/users',  async (req, res) => {
       const result = await users.find().toArray()
       res.send(result)
     })
@@ -139,7 +153,6 @@ async function run() {
       const email = req.params.email
       const query = { email: email }
       const result = await users.findOne(query)
-      console.log(result);
       res.send(result)
     })
 
@@ -162,6 +175,19 @@ async function run() {
       const update = {
         $set: {
           role: bodyData?.role,
+          // status: bodyData?.status,
+        }
+      }
+      const result = await users.updateOne(query, update, options)
+      res.send(result)
+    })
+    app.patch(`/usersStatus/:email`, async (req, res) => {
+      const email = req.params.email
+      const query = { email: email }
+      const options = { upsert: true };
+      const bodyData = req?.body
+      const update = {
+        $set: {
           status: bodyData?.status,
         }
       }
