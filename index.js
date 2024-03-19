@@ -30,6 +30,7 @@ async function run() {
     await client.connect();
 
     const mealsItem = client.db("HostelDB").collection("meals");
+    const upcoming = client.db("HostelDB").collection("upcoming");
     const users = client.db("HostelDB").collection("users");
     const memberShip = client.db("HostelDB").collection("memberShip");
 
@@ -68,12 +69,6 @@ async function run() {
       res.send(result)
     })
 
-    app.post('/mealItem', async(req, res) => {
-      const meals = req.body
-      const result = await mealsItem.insertOne(meals)
-      res.send(result)
-    })
-
     app.get('/mealsCategory', async (req, res) => {
       const search = req.query.search
       const query = { category: search }
@@ -81,16 +76,70 @@ async function run() {
       res.send(result)
     })
 
+    app.post('/mealItem', async (req, res) => {
+      const meals = req.body
+      const result = await mealsItem.insertOne(meals)
+      res.send(result)
+    })
+
+    app.delete('/mealItem/:id', async (req, res) => {
+      const id = req.params.id
+      console.log(id);
+      const query = { _id: new ObjectId(id) }
+      const result = await mealsItem.deleteOne(query)
+      res.send(result)
+    })
+
+    app.put('/manageItem/:id', async (req, res) => {
+      const id = req.params.id
+      const query = { _id: new ObjectId(id) }
+      const options = { upsert: true };
+      const data = req.body
+      const update = {
+        $set: {
+
+          name: data.name,
+          category: data.category,
+          ingredients: data?.ingredients,
+          rating: data.rating,
+          time: data.time,
+          like: data.like,
+          reviews: data.reviews,
+          price: data.price,
+          description: data.description,
+          image: data.image,
+
+        }
+      }
+      const result = await mealsItem.updateOne(query, update, options)
+      res.send(result)
+    })
+
+    // upcoming
+
+    app.get('/upcoming', verifyAdmin, async (req, res) => {
+      const result = await upcoming.find().toArray()
+      res.send(result)
+    })
+
+    app.post('/upcoming', async (req, res) => {
+      const meals = req.body
+      const result = await upcoming.insertOne(meals)
+      res.send(result)
+    })
+
 
     // user
-    app.get('/users',verifyAdmin, async (req, res) => {
+    app.get('/users', verifyAdmin, async (req, res) => {
       const result = await users.find().toArray()
       res.send(result)
     })
 
     app.get('/user/:email', async (req, res) => {
       const email = req.params.email
-      const result = await users.findOne({ email })
+      const query = { email: email }
+      const result = await users.findOne(query)
+      console.log(result);
       res.send(result)
     })
 
@@ -105,15 +154,15 @@ async function run() {
       res.send(result)
     })
 
-    app.patch(`/users/:id`,async(req,res) => {
+    app.patch(`/users/:id`, async (req, res) => {
       const id = req.params.id
       const query = { _id: new ObjectId(id) }
       const options = { upsert: true };
       const bodyData = req?.body
       const update = {
         $set: {
-          role: bodyData?.role ,
-          status: bodyData?.status ,
+          role: bodyData?.role,
+          status: bodyData?.status,
         }
       }
       const result = await users.updateOne(query, update, options)
@@ -149,31 +198,6 @@ async function run() {
       });
     })
 
-
-
-    app.put('/user/:email', async (req, res) => {
-      const email = req.params.email
-      const query = { email: email }
-      const options = { upsert: true };
-      const bodyData = req.body
-
-      const update = {
-        $set: {
-          name: bodyData.name,
-          email: bodyData.email,
-          image: bodyData.image,
-          role: bodyData.role,
-        }
-      }
-      const result = await user.updateOne(query, update, options)
-      res.send(result)
-    })
-    app.delete('/user/:id', async (req, res) => {
-      const id = req.params.id
-      const query = { _id: new ObjectId(id)}
-      const result = await user.deleteOne(query)
-      res.send(result)
-    })
 
 
     await client.db("admin").command({ ping: 1 });
