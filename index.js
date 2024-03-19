@@ -117,6 +117,11 @@ async function run() {
 
     // Meal request
 
+    app.get('/mealRequest', async (req, res) => {
+      const result = await mealRequest.find().toArray()
+      res.send(result)
+    })
+
     app.post('/mealRequest', async (req, res) => {
       const meals = req.body
       const result = await mealRequest.insertOne(meals)
@@ -126,7 +131,7 @@ async function run() {
     app.delete('/mealRequest/:id', async (req, res) => {
       const id = req.params.id
       const query = { _id: new ObjectId(id) }
-      const result = await mealsItem.deleteOne(query)
+      const result = await mealRequest.deleteOne(query)
       res.send(result)
     })
 
