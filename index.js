@@ -8,7 +8,8 @@ const port = process.env.PORT || 5000
 
 app.use(cors({
   origin: [
-    'http://localhost:5173', 'http://localhost:5174'
+    'http://localhost:5173', 
+    // 'https://unihostel-hub.firebaseapp.com'
   ],
   credentials: true,
 }))
@@ -72,7 +73,10 @@ async function run() {
 
     app.get('/mealsCategory', async (req, res) => {
       const search = req.query.search
-      const query = { category: search }
+      console.log(search);
+      const query = { 
+        category: {$regex: search, $options: 'i'}
+       }
       const result = await mealsItem.find(query).toArray()
       res.send(result)
     })
@@ -115,6 +119,20 @@ async function run() {
       res.send(result)
     })
 
+    app.patch(`/likeUpdate/:id`, async (req, res) => {
+      const id = req.params.id
+      const query = { _id: new ObjectId(id) }
+      const options = { upsert: true };
+      const bodyData = req?.body
+      const update = {
+        $set: {
+          like: bodyData?.like
+        }
+      }
+      const result = await mealsItem.updateOne(query, update, options)
+      res.send(result)
+    })
+
     // Meal request
 
     app.get('/mealRequest', async (req, res) => {
@@ -135,10 +153,22 @@ async function run() {
       res.send(result)
     })
 
-    // upcoming
-
+    // 
+    
     app.get('/upcoming', async (req, res) => {
       const result = await upcoming.find().toArray()
+      res.send(result)
+    })
+
+    app.get('/upcomings', async (req, res) => {
+      const query = {}
+      const options = {
+        sort: {
+          like: -1
+        }
+      }
+      // console.log(query,options);
+      const result = await upcoming.find(query, options).toArray()
       res.send(result)
     })
 
