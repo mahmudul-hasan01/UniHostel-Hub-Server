@@ -1,18 +1,21 @@
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const express = require('express')
+const cookieParser = require('cookie-parser')
 const app = express()
 const cors = require('cors')
 require('dotenv').config()
+const jwt = require('jsonwebtoken')
 const stripe = require('stripe')(process.env.Stripe_Secret_key)
 const port = process.env.PORT || 5000
 
 app.use(cors({
   origin: [
-    'http://localhost:5173', 
+    'http://localhost:5173',
     // 'https://unihostel-hub.firebaseapp.com'
   ],
   credentials: true,
 }))
+app.use(cookieParser())
 app.use(express.json())
 
 const uri = `mongodb+srv://${process.env.USER_ID}:${process.env.USER_PASS}@cluster0.uoehazd.mongodb.net/?retryWrites=true&w=majority`;
@@ -26,6 +29,26 @@ const client = new MongoClient(uri, {
   }
 });
 
+// jwt token
+
+const verifyToken = async (req, res, next) => {
+  const token = req.cookies?.token
+  if (!token) {
+    return res.status(401).send({ message: 'unauthorized access' })
+  }
+  jwt.verify(token, process.env.JWT_TOKACCESS_TOKEN_SECRET, (err, decoded) => {
+    if (err) {
+      console.log(err)
+      return res.status(401).send({ message: 'unauthorized access' })
+    }
+    req.user = decoded
+    next()
+  })
+}
+
+
+
+
 async function run() {
   try {
     await client.connect();
@@ -38,17 +61,51 @@ async function run() {
 
 
 
+    // post jwt
+
+    app.post('/jwt', async (req, res) => {
+      const user = req.body
+      // console.log('I need a new jwt', user)
+      const token = jwt.sign(user, process.env.JWT_TOKACCESS_TOKEN_SECRET, {
+        expiresIn: '365d',
+      })
+      res
+        .cookie('token', token, {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === 'production',
+          sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'strict',
+        })
+        .send({ success: true })
+    })
+
+    // Logout
+    app.get('/logout', async (req, res) => {
+      try {
+        res
+          .clearCookie('token', {
+            maxAge: 0,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'strict',
+          })
+          .send({ success: true })
+        // console.log('Logout successful')
+      } catch (err) {
+        res.status(500).send(err)
+      }
+    })
+
+
     // admin rode 
 
-    // const verifyAdmin = async (req, res, next) => {
-    //   const user = req.user
-    //   console.log('user from verify admin', user)
-      // const query = { email: user?.email }
-      // const result = await users.findOne(query)
-      // if (!result || result?.role !== 'admin')
-      //   return res.status(401).send({ message: 'unauthorized access' })
-    //   next()
-    // }
+    const verifyAdmin = async (req, res, next) => {
+      const user = req.user
+      console.log('user from verify admin', user)
+      const query = { email: user?.email }
+      const result = await users.findOne(query)
+      if (!result || result?.role !== 'admin')
+        return res.status(401).send({ message: 'unauthorized access' })
+      next()
+    }
 
 
     // // meals
@@ -56,6 +113,59 @@ async function run() {
     //   const result = await meals.find().toArray()
     //   res.send(result)
     // })
+
+    // user
+
+    app.get('/users', verifyToken,verifyAdmin, async (req, res) => {
+      const result = await users.find().toArray()
+      res.send(result)
+    })
+
+    app.get('/user/:email', async (req, res) => {
+      const email = req.params.email
+      const query = { email: email }
+      const result = await users.findOne(query)
+      res.send(result)
+    })
+
+    app.post('/users', async (req, res) => {
+      const user = req.body
+      const query = { email: user.email }
+      const existingUser = await users.findOne(query)
+      if (existingUser) {
+        return res.send({ message: 'user already exists', insertedId: null })
+      }
+      const result = await users.insertOne(user)
+      res.send(result)
+    })
+
+    app.patch(`/users/:id`, async (req, res) => {
+      const id = req.params.id
+      const query = { _id: new ObjectId(id) }
+      const options = { upsert: true };
+      const bodyData = req?.body
+      const update = {
+        $set: {
+          role: bodyData?.role,
+          // status: bodyData?.status,
+        }
+      }
+      const result = await users.updateOne(query, update, options)
+      res.send(result)
+    })
+    app.patch(`/usersStatus/:email`, async (req, res) => {
+      const email = req.params.email
+      const query = { email: email }
+      const options = { upsert: true };
+      const bodyData = req?.body
+      const update = {
+        $set: {
+          status: bodyData?.status,
+        }
+      }
+      const result = await users.updateOne(query, update, options)
+      res.send(result)
+    })
 
     // mealItem
 
@@ -74,9 +184,9 @@ async function run() {
     app.get('/mealsCategory', async (req, res) => {
       const search = req.query.search
       console.log(search);
-      const query = { 
-        category: {$regex: search, $options: 'i'}
-       }
+      const query = {
+        category: { $regex: search, $options: 'i' }
+      }
       const result = await mealsItem.find(query).toArray()
       res.send(result)
     })
@@ -154,7 +264,7 @@ async function run() {
     })
 
     // 
-    
+
     app.get('/upcoming', async (req, res) => {
       const result = await upcoming.find().toArray()
       res.send(result)
@@ -167,7 +277,6 @@ async function run() {
           like: -1
         }
       }
-      // console.log(query,options);
       const result = await upcoming.find(query, options).toArray()
       res.send(result)
     })
@@ -175,58 +284,6 @@ async function run() {
     app.post('/upcoming', async (req, res) => {
       const meals = req.body
       const result = await upcoming.insertOne(meals)
-      res.send(result)
-    })
-
-    // user
-    app.get('/users',  async (req, res) => {
-      const result = await users.find().toArray()
-      res.send(result)
-    })
-
-    app.get('/user/:email', async (req, res) => {
-      const email = req.params.email
-      const query = { email: email }
-      const result = await users.findOne(query)
-      res.send(result)
-    })
-
-    app.post('/users', async (req, res) => {
-      const user = req.body
-      const query = { email: user.email }
-      const existingUser = await users.findOne(query)
-      if (existingUser) {
-        return res.send({ message: 'user already exists', insertedId: null })
-      }
-      const result = await users.insertOne(user)
-      res.send(result)
-    })
-
-    app.patch(`/users/:id`, async (req, res) => {
-      const id = req.params.id
-      const query = { _id: new ObjectId(id) }
-      const options = { upsert: true };
-      const bodyData = req?.body
-      const update = {
-        $set: {
-          role: bodyData?.role,
-          // status: bodyData?.status,
-        }
-      }
-      const result = await users.updateOne(query, update, options)
-      res.send(result)
-    })
-    app.patch(`/usersStatus/:email`, async (req, res) => {
-      const email = req.params.email
-      const query = { email: email }
-      const options = { upsert: true };
-      const bodyData = req?.body
-      const update = {
-        $set: {
-          status: bodyData?.status,
-        }
-      }
-      const result = await users.updateOne(query, update, options)
       res.send(result)
     })
 
